@@ -1,10 +1,12 @@
-camera.default <- function (y,
-                            index,
-                            design = NULL,
-                            contrast = ncol(design),
-                            weights = NULL, 
-                            use.ranks = FALSE, allow.neg.cor = TRUE, trend.var = FALSE, 
-                            sort = TRUE) {
+library(limma)
+
+camera.mod <- function (y,
+                        index,
+                        design = NULL,
+                        contrast = ncol(design),
+                        weights = NULL, 
+                        use.ranks = FALSE, allow.neg.cor = TRUE, trend.var = FALSE, 
+                        sort = TRUE) {
     y <- as.matrix(y)
     G <- nrow(y)
     n <- ncol(y)
@@ -37,15 +39,17 @@ camera.default <- function (y,
         if (length(contrast) == 0) 
             stop("coef ", contrast, " not found")
     }
-    if (length(contrast) == 1 && contrast < p) {
-        j <- c((1:p)[-contrast], contrast)
-        design <- design[, j] ## JDZ: this if-trunk reorders the to-be-tested contrast to the last column of the design matrix
+    if (length(contrast) == 1) {
+        if(contrast < p) {
+            j <- c((1:p)[-contrast], contrast)
+            design <- design[, j] ## JDZ: this if-trunk reorders the to-be-tested contrast to the last column of the design matrix
+        }
     }  else {
         QR <- qr(contrast)
         design <- t(qr.qty(QR, t(design)))
         if (sign(QR$qr[1, 1] < 0)) 
             design[, 1] <- -design[, 1]
-        design <- design[, c(2:p, 1)] ## JDZ: this else-trunk 'trransforms' the design matrix into a new one with the contrast and reorders the to-be-tested contrast to the last column of the design matrix - I currently do not get why this is done so...
+        design <- design[, c(2:p, 1)] ## JDZ: this else-trunk 'trransforms' the design matrix into a new one with the contrast and reorders the to-be-tested contrast to the last column of the design matrix. I understand that what we estimate is in fact a linear transformation of coefficients of the linear model (beta == C^T %*% alpha, where alpha denotes coefficients and C^T denotes contrasts), it seems that the QR decomposition of the contrast matrix is used to re-parameterize the design matrix so as to encode the desired contrast directly in one of the columns in the design matrix. This is however just a guess and needs verification. 
     }
     if (is.null(weights)) {
         QR <- qr(design)
@@ -92,6 +96,9 @@ camera.default <- function (y,
     colnames(tab) <- c("NGenes", "Correlation", "Down", "Up", 
                        "TwoSided")
 
+    leadings <- vector("character", nsets)
+    rn <- rownames(y)
+    if(is.null(rn)) rn <- as.character(1:G)
     ## JDZ: notice that no matter whether rank is used or not, the statistic underlying the camera method is always the moderated t statistic
     for (i in 1:nsets) {
         iset <- index[[i]]
@@ -125,6 +132,19 @@ camera.default <- function (y,
                 1/m2))
             tab[i, 3] <- pt(two.sample.t, df = df.camera)
             tab[i, 4] <- pt(two.sample.t, df = df.camera, lower.tail = FALSE)
+            isDown <- tab[i,3] <= tab[i,4]
+            if(isDown) { ## pDown < pUp
+                leadingInds <- iset[StatInSet<meanStat]
+            } else {
+                leadingInds <- iset[StatInSet>meanStat]
+            }
+            leadingVals <- Stat[leadingInds]
+            leadingOrd <- order(leadingVals, decreasing=!isDown)
+            leadingInds <- leadingInds[leadingOrd]
+            leadingVals <- leadingVals[leadingOrd]
+
+            leadings[i] <- paste(sprintf("%s(%1.2f)",
+                                         rn[leadingInds], leadingVals), collapse=",")
         }
     }
     tab[, 5] <- 2 * pmin(tab[, 3], tab[, 4])
@@ -136,9 +156,33 @@ camera.default <- function (y,
     tab$Down <- tab$Up <- tab$TwoSided <- NULL
     if (nsets > 1) 
         tab$FDR <- p.adjust(tab$PValue, method = "BH")
+    tab$LeadingEdgeGenes <- leadings
     if (sort && nsets > 1) {
         o <- order(tab$PValue)
         tab <- tab[o, ]
     }
     tab
 }
+
+## a simple example
+set.seed(1887)
+y <- matrix(rnorm(1000*6),1000,6)
+rownames(y) <- sprintf("Gene%d", 1:nrow(y))
+design <- cbind(Intercept=1,Group=c(0,0,0,1,1,1))
+
+## index1: genuinely significantly up-regulated
+index1 <- 1:20
+y[index1,4:6] <- y[index1,4:6]+1
+## index2: not DEs
+index2 <- 21:40
+
+gs <- list(GeneSet1=index1, GeneSet2=index2)
+(cameraRes <- camera(y, gs, design))
+(cameraModRes <- camera.mod(y, gs, design))
+
+stopifnot(identical(cameraRes[,1:5], cameraModRes[,1:5]))
+
+yNoRowNames <- y
+rownames(y) <- NULL
+(cameraModRes.noRowNames <- camera.mod(yNoRowNames, gs, design))
+stopifnot(identical(cameraRes[,1:5], cameraModRes.noRowNames[,1:5]))

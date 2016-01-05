@@ -96,7 +96,7 @@ camera.mod <- function (y,
     colnames(tab) <- c("NGenes", "Correlation", "Down", "Up", 
                        "TwoSided")
 
-    leadings <- vector("character", nsets)
+    conts <- vector("character", nsets)
     rn <- rownames(y)
     if(is.null(rn)) rn <- as.character(1:G)
     ## JDZ: notice that no matter whether rank is used or not, the statistic underlying the camera method is always the moderated t statistic
@@ -133,19 +133,19 @@ camera.mod <- function (y,
             tab[i, 3] <- pt(two.sample.t, df = df.camera)
             tab[i, 4] <- pt(two.sample.t, df = df.camera, lower.tail = FALSE)
         }
-                    isDown <- tab[i,3] <= tab[i,4]
-            if(isDown) { ## pDown < pUp
-                leadingInds <- iset[StatInSet<meanStat]
-            } else {
-                leadingInds <- iset[StatInSet>meanStat]
-            }
-        leadingVals <- Stat[leadingInds]
-        leadingOrd <- order(leadingVals, decreasing=!isDown)
-        leadingInds <- leadingInds[leadingOrd]
-        leadingVals <- leadingVals[leadingOrd]
+        isDown <- tab[i,3] <= tab[i,4]
+        if(isDown) { ## pDown < pUp
+            contInds <- iset[StatInSet<meanStat]
+        } else {
+            contInds <- iset[StatInSet>meanStat]
+        }
+        contVals <- Stat[contInds]
+        contOrd <- order(contVals, decreasing=!isDown)
+        contInds <- contInds[contOrd]
+        contVals <- contVals[contOrd]
         
-        leadings[i] <- paste(sprintf("%s(%1.2f)",
-                                     rn[leadingInds], leadingVals), collapse=",")
+        conts[i] <- paste(sprintf("%s(%1.2f)",
+                                     rn[contInds], contVals), collapse=",")
     }
     
     tab[, 5] <- 2 * pmin(tab[, 3], tab[, 4])
@@ -157,7 +157,7 @@ camera.mod <- function (y,
     tab$Down <- tab$Up <- tab$TwoSided <- NULL
     if (nsets > 1) 
         tab$FDR <- p.adjust(tab$PValue, method = "BH")
-    tab$LeadingEdgeGenes <- leadings
+    tab$ContributingGenes <- conts
     if (sort && nsets > 1) {
         o <- order(tab$PValue)
         tab <- tab[o, ]
@@ -185,7 +185,7 @@ stopifnot(identical(cameraRes[,1:5], cameraModRes[,1:5]))
 
 ## test no row names
 yNoRowNames <- y
-rownames(y) <- NULL
+rownames(yNoRowNames) <- NULL
 (cameraModRes.noRowNames <- camera.mod(yNoRowNames, gs, design))
 stopifnot(identical(cameraRes[,1:5], cameraModRes.noRowNames[,1:5]))
 

@@ -168,6 +168,18 @@ y3[index1, 4:6] <- y3[index1, 4:6]+2 ## 3-sigma changes
 
 randomFDRresult.3sigma <- generateFDRreport(y3, index1, design, nRandoms, suffix="3sigma")
 
+## half of genes with 1 sigma, the rest not changing
+y1half <- y
+y1half[index1[11:20], 4:6] <- y1half[index1[11:20], 4:6]-1 ## 1-sigma changes
+
+randomFDRresult.sigmaHalf <- generateFDRreport(y1half, index1, design, nRandoms, suffix="sigmaHalf")
+
+## half of genes with 2 sigma, the rest not changing
+y2half <- y
+y2half[index1[1:10], 4:6] <- y2half[index1[1:10], 4:6]+1 ## 2-sigma changes
+
+randomFDRresult.2sigmaHalf <- generateFDRreport(y2half, index1, design, nRandoms, suffix="2sigmaHalf")
+
 ## half of genes with 3 sigma, the rest not changing
 y3half <- y
 y3half[index1[1:10], 4:6] <- y3half[index1[1:10], 4:6]+2 ## 3-sigma changes

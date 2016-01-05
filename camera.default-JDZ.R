@@ -132,21 +132,22 @@ camera.mod <- function (y,
                 1/m2))
             tab[i, 3] <- pt(two.sample.t, df = df.camera)
             tab[i, 4] <- pt(two.sample.t, df = df.camera, lower.tail = FALSE)
-            isDown <- tab[i,3] <= tab[i,4]
+        }
+                    isDown <- tab[i,3] <= tab[i,4]
             if(isDown) { ## pDown < pUp
                 leadingInds <- iset[StatInSet<meanStat]
             } else {
                 leadingInds <- iset[StatInSet>meanStat]
             }
-            leadingVals <- Stat[leadingInds]
-            leadingOrd <- order(leadingVals, decreasing=!isDown)
-            leadingInds <- leadingInds[leadingOrd]
-            leadingVals <- leadingVals[leadingOrd]
-
-            leadings[i] <- paste(sprintf("%s(%1.2f)",
-                                         rn[leadingInds], leadingVals), collapse=",")
-        }
+        leadingVals <- Stat[leadingInds]
+        leadingOrd <- order(leadingVals, decreasing=!isDown)
+        leadingInds <- leadingInds[leadingOrd]
+        leadingVals <- leadingVals[leadingOrd]
+        
+        leadings[i] <- paste(sprintf("%s(%1.2f)",
+                                     rn[leadingInds], leadingVals), collapse=",")
     }
+    
     tab[, 5] <- 2 * pmin(tab[, 3], tab[, 4])
     tab <- data.frame(tab, stringsAsFactors = FALSE)
     Direction <- rep.int("Up", nsets)
@@ -179,10 +180,17 @@ index2 <- 21:40
 gs <- list(GeneSet1=index1, GeneSet2=index2)
 (cameraRes <- camera(y, gs, design))
 (cameraModRes <- camera.mod(y, gs, design))
-
+stopifnot(ncol(cameraModRes)==6)
 stopifnot(identical(cameraRes[,1:5], cameraModRes[,1:5]))
 
+## test no row names
 yNoRowNames <- y
 rownames(y) <- NULL
 (cameraModRes.noRowNames <- camera.mod(yNoRowNames, gs, design))
 stopifnot(identical(cameraRes[,1:5], cameraModRes.noRowNames[,1:5]))
+
+## test rankSum test
+(cameraRsRes <- camera(y, gs, design, use.ranks=TRUE))
+(cameraRsModRes <- camera.mod(y, gs, design, use.ranks=TRUE))
+stopifnot(ncol(cameraRsModRes)==6)
+stopifnot(identical(cameraRsRes[,1:5], cameraRsModRes[,1:5]))

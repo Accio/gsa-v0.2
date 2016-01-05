@@ -34,7 +34,7 @@ fdrDepFDR <- fdrtool(fdrDep$PValue, statistic="pvalue")
 head(fdrDepFDR$qval)
 
 ## can we draw a curve showing how BH FDR values change simply with the increased lengths of gene lists?
-fdrAfterAppendRandom <- function(matrix, index, design, nRandom=10) {
+fdrAfterAppendRandom <- function(matrix, index, design, nRandom=10, use.ranks=FALSE) {
     if(nRandom>0) {
         indLen <- length(index)
         restInd <- setdiff(1:nrow(matrix), index)
@@ -44,7 +44,7 @@ fdrAfterAppendRandom <- function(matrix, index, design, nRandom=10) {
     } else {
         index <- list(index=index)
     }
-    cameraRes <- camera(matrix, index=index, design=design, sort=FALSE)
+    cameraRes <- camera(matrix, index=index, design=design, sort=FALSE, use.ranks=use.ranks)
     if(nRandom==0) {
         p <- fdr <- cameraRes["index", "PValue"] ## in case of single gene set no FDR correction is made
         pRank <- fdrRank <- 1
@@ -59,9 +59,9 @@ fdrAfterAppendRandom <- function(matrix, index, design, nRandom=10) {
 
 (nRandoms <- as.integer(c(0, 1,2, 5,10^seq(1,4,0.125), 5*10^4,1*10^5,2*10^5)))
 library(multicore)
-getFDRresult <- function(matrix, index, design, nRandoms) {
+getFDRresult <- function(matrix, index, design, nRandoms, use.ranks=FALSE) {
     randomFDRs <- mclapply(nRandoms, function(x)
-        fdrAfterAppendRandom(matrix, index, design, nRandom=x))
+        fdrAfterAppendRandom(matrix, index, design, nRandom=x, use.ranks=use.ranks))
     randomFDRresult <- data.frame(nRandom=nRandoms,
                                   p=sapply(randomFDRs, function(x) x$p),
                                   pRank=sapply(randomFDRs, function(x) x$pRank),
@@ -75,14 +75,38 @@ randomFDRresult <- getFDRresult(y, index1, design, nRandoms)
 
 logSteps <- function(x) return(c(1,2,5,10,20, 50,100,200, 500,1000,
                                  2000,5000,10000, 20000, 50000, 1*10^5, 2*10^5))
+getNbyFDR <- function(fdrResult, threshold=.10) {
+    isNearest <- with(fdrResult, which.min(abs(FDR-threshold)))
+    if(fdrResult$FDR[isNearest]==threshold) {
+        return(fdrResult$nRandom[isNearest])
+    } else if (fdrResult$FDR[isNearest]<threshold)  {
+        a <- with(fdrResult, nRandom[isNearest+1])
+        m <- with(fdrResult, FDR[isNearest+1])
+        b <- with(fdrResult, nRandom[isNearest])
+        j <- with(fdrResult, FDR[isNearest])
+
+    } else {
+        a <- with(fdrResult, nRandom[isNearest])
+        m <- with(fdrResult, FDR[isNearest])
+        b <- with(fdrResult, nRandom[isNearest-1])
+        j <- with(fdrResult, FDR[isNearest-1])
+    }
+    x <- (b*(m-threshold)+a*(threshold-j))/(m-j)
+    x <- as.integer(x)
+    if(length(x)==0) return(0L)
+    return(x)
+}
 
 plotFDR <- function(fdrResult,main="FDR of a genuine DE-geneset (camera)") {
-    
+    n <- getNbyFDR(fdrResult, thr=0.1)
     res <- xyplot(FDR~nRandom, data=fdrResult,
-                  abline=list(h=c(log2(1), log2(0.10), log2(fdrResult$p[1])),
-                      col=c(rep("black", 2), "red"), lwd=c(rep(1,2), 1.5), lty=c(rep(2,2), 1)),
+                  abline=list(h=c(log2(1), log2(0.10), log2(fdrResult$p[1])),v=log10(n),
+                      col=c(rep("black", 2), "red"), lwd=c(rep(1,2), 1.5),
+                      lty=c(rep(2,2), 1)),
                   main=main, 
                   xlab="Number of random gene sets tested", ylab="FDR (Benjamini-Hochberg)",
+                  key=list(space="top", lines=list(col=c("red")),
+                      text=list("pValue")),
                   scales=list(tck=c(1,0), alternating=1L,
                       y=list(log=2, at=c(1E-4,1E-3,1E-2,0.02, 0.05, 0.10, 0.25, 0.5, 1)),
                       x=list(at=logSteps(),
@@ -139,8 +163,8 @@ head(fdrDep2sigma <- camera(y2, c(list(set1=index1), indexes), design))
 fdrDepFDR2sigma <- fdrtool(fdrDep2sigma$PValue, statistic="pvalue")
 head(fdrDepFDR2sigma$qval) ## local fdr 0.005, much better!
 
-generateFDRreport <- function(matrix, index, design, nRandoms, suffix="") {
-    randomFDRresult <- getFDRresult(matrix, index, design, nRandoms)
+generateFDRreport <- function(matrix, index, design, nRandoms, use.ranks=FALSE, suffix="") {
+    randomFDRresult <- getFDRresult(matrix, index, design, nRandoms, use.ranks=use.ranks)
     plotFDR(randomFDRresult,
             main=sprintf("FDR of a genuine DE-geneset (%s)", suffix))
     ipdf(figfile(sprintf("FDR-numberOfRandomGeneSets-%s.pdf", suffix)),
@@ -160,7 +184,11 @@ generateFDRreport <- function(matrix, index, design, nRandoms, suffix="") {
 
 }
 ## nRandomsSmall <- c(0,1,2,5,10)
-randomFDRresult.2sigma <- generateFDRreport(y2, index1, design, nRandoms, suffix="2sigma")
+system.time(randomFDRresult.2sigma <- generateFDRreport(y2, index1, design, nRandoms, suffix="2sigma"))
+
+system.time(randomFDRresult.2sigma.ranks <- generateFDRreport(y2, index1, design, nRandoms, suffix="2sigmaUsingRanks", use.ranks=TRUE))
+
+## note: t-test takes about 32s, and wilcoxon-test takes about 106s (note by David: likely to be improved by BioQC)
 
 ## 3sigma
 y3 <- y
@@ -185,3 +213,24 @@ y3half <- y
 y3half[index1[1:10], 4:6] <- y3half[index1[1:10], 4:6]+2 ## 3-sigma changes
 
 randomFDRresult.3sigmaHalf <- generateFDRreport(y3half, index1, design, nRandoms, suffix="3sigmaHalf")
+
+
+## if we set the threshold of FDR to 0.1, what is the maximal gene sets that can be simultaneously tested in order to not to miss the genuine-DE geneset?
+
+
+effects <- c("sigmaHalf", "sigma", "2sigmaHalf","2sigma", "3sigmaHalf", "3sigma")
+thrs <- c(0.05, 0.10, 0.25)
+fdrThres <- data.frame(effect=rep(effects, each=length(thrs)),
+                       FDRthreshold=thrs,
+                       N=c(sapply(thrs, function(x) getNbyFDR(randomFDRresult.sigmaHalf,x)),
+                           sapply(thrs, function(x) getNbyFDR(randomFDRresult,x)),
+                           sapply(thrs, function(x) getNbyFDR(randomFDRresult.2sigmaHalf,x)),
+                           sapply(thrs, function(x) getNbyFDR(randomFDRresult.2sigma,x)),
+                           sapply(thrs, function(x) getNbyFDR(randomFDRresult.3sigmaHalf,x)),
+                           sapply(thrs, function(x) getNbyFDR(randomFDRresult.3sigma,x))))
+
+writeMatrix(fdrThres, outfile("effect-FDRthreshold-N-table.txt"), row.names=FALSE)
+
+## alternatively: given a number of gene sets (say 3000), what is the FDR value of the genuine-DE geneset if there is one and only one such gene set?
+
+

@@ -78,22 +78,24 @@ logSteps <- function(x) return(c(1,2,5,10,20, 50,100,200, 500,1000,
 
 plotFDR <- function(fdrResult,main="FDR of a genuine DE-geneset (camera)") {
     
-    xyplot(FDR~nRandom, data=fdrResult,
-           abline=list(h=c(log2(1), log2(0.10), log2(fdrResult$p[1])),
-               col=c(rep("black", 2), "red"), lwd=c(rep(1,2), 1.5), lty=c(rep(2,2), 1)),
-           main=main, 
-           xlab="Number of random gene sets tested", ylab="FDR (Benjamini-Hochberg)",
-           scales=list(tck=c(1,0), alternating=1L,
-               y=list(log=2, at=c(1E-4,1E-3,1E-2,0.02, 0.05, 0.10, 0.25, 0.5, 1)),
-               x=list(at=logSteps(),
-                   log=TRUE, rot=45)), type="b", fill="darkgray", pch=21)
+    res <- xyplot(FDR~nRandom, data=fdrResult,
+                  abline=list(h=c(log2(1), log2(0.10), log2(fdrResult$p[1])),
+                      col=c(rep("black", 2), "red"), lwd=c(rep(1,2), 1.5), lty=c(rep(2,2), 1)),
+                  main=main, 
+                  xlab="Number of random gene sets tested", ylab="FDR (Benjamini-Hochberg)",
+                  scales=list(tck=c(1,0), alternating=1L,
+                      y=list(log=2, at=c(1E-4,1E-3,1E-2,0.02, 0.05, 0.10, 0.25, 0.5, 1)),
+                      x=list(at=logSteps(),
+                          log=TRUE, rot=45)), type="b", fill="darkgray", pch=21)
+    print(res)
+    return(invisible(res))
 
 }
 plotFDR(randomFDRresult)
 ipdf(figfile("FDR-numberOfRandomGeneSets.pdf"), width=6L, height=6L)
 
 plotFDRrank <- function(fdrResult,main="FDR rank of a genuine DE-geneset (camera)") {
-    xyplot(FDRrank~nRandom, data=fdrResult,
+    res <- xyplot(FDRrank~nRandom, data=fdrResult,
            abline=list(a=0,b=1, lty=2),
            main=main,
            xlab="Number of random gene sets tested", ylab="FDR rank (Benjamini-Hochberg)",
@@ -102,13 +104,15 @@ plotFDRrank <- function(fdrResult,main="FDR rank of a genuine DE-geneset (camera
                x=list(at=c(1,10,50,100,200, 500,1000,
                           2000,5000,10000, 20000, 50000, 1*10^5, 2*10^5),
                    log=TRUE, rot=45)), type="b", fill="darkgray", pch=21)
+    print(res)
+    return(invisible(res))
 
 }
 plotFDRrank(randomFDRresult)
 ipdf(figfile("FDRrank-numberOfRandomGeneSets.pdf"), width=6L, height=6L)
 
 plotPrank <- function(fdrResult,main="pValue rank of a genuine DE-geneset (camera)") {
-    xyplot(pRank~nRandom, data=fdrResult,
+    res <- xyplot(pRank~nRandom, data=fdrResult,
            abline=list(a=0,b=1, lty=2),
            main=main, 
            xlab="Number of random gene sets tested", ylab="pValue rank",
@@ -117,6 +121,8 @@ plotPrank <- function(fdrResult,main="pValue rank of a genuine DE-geneset (camer
                x=list(at=c(1,10,50,100,200, 500,1000,
                           2000,5000,10000, 20000, 50000, 1*10^5, 2*10^5),
                    log=TRUE, rot=45)), type="b", fill="darkgray", pch=21)
+        print(res)
+    return(invisible(res))
 }
 plotPrank(randomFDRresult)
 ipdf(figfile("pRank-numberOfRandomGeneSets.pdf"), width=6L, height=6L)
@@ -133,32 +139,37 @@ head(fdrDep2sigma <- camera(y2, c(list(set1=index1), indexes), design))
 fdrDepFDR2sigma <- fdrtool(fdrDep2sigma$PValue, statistic="pvalue")
 head(fdrDepFDR2sigma$qval) ## local fdr 0.005, much better!
 
+generateFDRreport <- function(matrix, index, design, nRandoms, suffix="") {
+    randomFDRresult <- getFDRresult(matrix, index, design, nRandoms)
+    plotFDR(randomFDRresult,
+            main=sprintf("FDR of a genuine DE-geneset (%s)", suffix))
+    ipdf(figfile(sprintf("FDR-numberOfRandomGeneSets-%s.pdf", suffix)),
+         width=6L, height=6L)
+    plotFDRrank(randomFDRresult,
+                main=sprintf("FDR rank of a genuine DE-geneset (%s)", suffix))
+    ipdf(figfile(sprintf("FDRrank-numberOfRandomGeneSets-%s.pdf", suffix)),
+         width=6L, height=6L)
+    plotPrank(randomFDRresult,
+              main=sprintf("pValue rank of a genuine DE-geneset (%s)", suffix))
+    ipdf(figfile(sprintf("pRank-numberOfRandomGeneSets-%s.pdf", suffix)),
+         width=6L, height=6L)
+    
+    writeMatrix(randomFDRresult,
+                outfile(sprintf("randomFDRresult-%s.txt", suffix)))
+    return(invisible(randomFDRresult))
 
-randomFDRresult.2sigma <- getFDRresult(y2, index1, design, nRandoms)
-plotFDR(randomFDRresult.2sigma, main="FDR of a genuine DE-geneset (2-sigma)")
-ipdf(figfile("FDR-numberOfRandomGeneSets-2sigma.pdf"), width=6L, height=6L)
-plotFDRrank(randomFDRresult.2sigma, main="FDR rank of a genuine DE-geneset (2-sigma)")
-ipdf(figfile("FDRrank-numberOfRandomGeneSets-2sigma.pdf"), width=6L, height=6L)
-plotPrank(randomFDRresult.2sigma, main="pValue rank of a genuine DE-geneset (2-sigma)")
-ipdf(figfile("pRank-numberOfRandomGeneSets-2sigma.pdf"), width=6L, height=6L)
-
-writeMatrix(randomFDRresult.2sigma, outfile("randomFDRresult-2sigma.txt"))
+}
+## nRandomsSmall <- c(0,1,2,5,10)
+randomFDRresult.2sigma <- generateFDRreport(y2, index1, design, nRandoms, suffix="2sigma")
 
 ## 3sigma
 y3 <- y
 y3[index1, 4:6] <- y3[index1, 4:6]+2 ## 3-sigma changes
-## fdr gets better: 0.0009 
-head(fdrDep3sigma <- camera(y3, c(list(set1=index1), indexes), design))
-fdrDepFDR3sigma <- fdrtool(fdrDep3sigma$PValue, statistic="pvalue")
-head(fdrDepFDR3sigma$qval) ## local fdr 0.0022, much better!
 
+randomFDRresult.3sigma <- generateFDRreport(y3, index1, design, nRandoms, suffix="3sigma")
 
-randomFDRresult.3sigma <- getFDRresult(y3, index1, design, nRandoms)
-plotFDR(randomFDRresult.3sigma, main="FDR of a genuine DE-geneset (3-sigma)")
-ipdf(figfile("FDR-numberOfRandomGeneSets-3sigma.pdf"), width=6L, height=6L)
-plotFDRrank(randomFDRresult.3sigma, main="FDR rank of a genuine DE-geneset (3-sigma)")
-ipdf(figfile("FDRrank-numberOfRandomGeneSets-3sigma.pdf"), width=6L, height=6L)
-plotPrank(randomFDRresult.3sigma, main="pValue rank of a genuine DE-geneset (3-sigma)")
-ipdf(figfile("pRank-numberOfRandomGeneSets-3sigma.pdf"), width=6L, height=6L)
+## half of genes with 3 sigma, the rest not changing
+y3half <- y
+y3half[index1[1:10], 4:6] <- y3half[index1[1:10], 4:6]+2 ## 3-sigma changes
 
-writeMatrix(randomFDRresult.3sigma, outfile("randomFDRresult-3sigma.txt"))
+randomFDRresult.3sigmaHalf <- generateFDRreport(y3half, index1, design, nRandoms, suffix="3sigmaHalf")

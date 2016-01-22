@@ -8,25 +8,28 @@ outfile <- function(x) file.path("output", x)
 
 set.seed(1887)
 
-y <- matrix(rnorm(1000*6),1000,6)
+y0 <- matrix(rnorm(1000*6),1000,6)
 design <- cbind(Intercept=1,Group=c(0,0,0,1,1,1))
 
 ## index1: genuinely significantly up-regulated
 index1 <- 1:20
-y[index1,4:6] <- y[index1,4:6]+1
+y1 <- y0
+y1[index1,4:6] <- y1[index1,4:6]+1
 ## index2: not DEs
 index2 <- 21:40
 
-camera(y, index1, design)
-camera(y, index2, design)
-camera(y, list(set1=index1,set2=index2), design) ## FDR 0.003 versus 0.156 - set1 is significant
+camera(y1, index1, design)
+camera(y1, index2, design)
+camera(y1, list(set1=index1,set2=index2), design) ## FDR 0.003 versus 0.156 - set1 is significant
+
+
 
 ## however the FDR is quite sensitive to number of genesets that are tested. In fact if a long list of randomly selected gene sets is tested along with index1, the FDR value of index1 will drop (see below), though it is still ranked the highest
 
 gsN <- 100
 indexes <- lapply(1:gsN, function(x) sample(21:1000, 20))
 names(indexes) <- sprintf("RandomGeneSet%d", 1:gsN)
-head(fdrDep <- camera(y, c(list(set1=index1), indexes), design))
+head(fdrDep <- camera(y1, c(list(set1=index1), indexes), design))
 
 ## is this caused only by the BH (global?) FDR correction? The answer is no: local false discovery rate estimated for index1 is 0.309, 
 library(fdrtool)
@@ -69,7 +72,7 @@ getFDRresult <- function(matrix, index, design, nRandoms, use.ranks=FALSE) {
                                   FDRrank=sapply(randomFDRs, function(x) x$FDRrank))
     return(randomFDRresult)
 }
-randomFDRresult <- getFDRresult(y, index1, design, nRandoms)
+randomFDRresult <- getFDRresult(y1, index1, design, nRandoms)
 
 
 
@@ -156,8 +159,8 @@ writeMatrix(randomFDRresult, outfile("randomFDRresult.txt"))
 
 ## is this because of the relative moderate change (1-sigma?)
 ## 2sigma
-y2 <- y
-y2[index1, 4:6] <- y2[index1, 4:6]+1 ## 2-sigma changes
+y2 <- y0
+y2[index1, 4:6] <- y2[index1, 4:6]+2 ## 2-sigma changes
 ## fdr gets better: 0.0009 
 head(fdrDep2sigma <- camera(y2, c(list(set1=index1), indexes), design))
 fdrDepFDR2sigma <- fdrtool(fdrDep2sigma$PValue, statistic="pvalue")
@@ -191,26 +194,26 @@ system.time(randomFDRresult.2sigma.ranks <- generateFDRreport(y2, index1, design
 ## note: t-test takes about 32s, and wilcoxon-test takes about 106s (note by David: likely to be improved by BioQC)
 
 ## 3sigma
-y3 <- y
-y3[index1, 4:6] <- y3[index1, 4:6]+2 ## 3-sigma changes
+y3 <- y0
+y3[index1, 4:6] <- y3[index1, 4:6]+3 ## 3-sigma changes
 
 randomFDRresult.3sigma <- generateFDRreport(y3, index1, design, nRandoms, suffix="3sigma")
 
 ## half of genes with 1 sigma, the rest not changing
-y1half <- y
-y1half[index1[11:20], 4:6] <- y1half[index1[11:20], 4:6]-1 ## 1-sigma changes
+y1half <- y0
+y1half[index1[1:10], 4:6] <- y1half[index1[1:10], 4:6]+1 ## 1-sigma changes
 
 randomFDRresult.sigmaHalf <- generateFDRreport(y1half, index1, design, nRandoms, suffix="sigmaHalf")
 
 ## half of genes with 2 sigma, the rest not changing
-y2half <- y
-y2half[index1[1:10], 4:6] <- y2half[index1[1:10], 4:6]+1 ## 2-sigma changes
+y2half <- y0
+y2half[index1[1:10], 4:6] <- y2half[index1[1:10], 4:6]+2 ## 2-sigma changes
 
 randomFDRresult.2sigmaHalf <- generateFDRreport(y2half, index1, design, nRandoms, suffix="2sigmaHalf")
 
 ## half of genes with 3 sigma, the rest not changing
-y3half <- y
-y3half[index1[1:10], 4:6] <- y3half[index1[1:10], 4:6]+2 ## 3-sigma changes
+y3half <- y0
+y3half[index1[1:10], 4:6] <- y3half[index1[1:10], 4:6]+3 ## 3-sigma changes
 
 randomFDRresult.3sigmaHalf <- generateFDRreport(y3half, index1, design, nRandoms, suffix="3sigmaHalf")
 
@@ -233,4 +236,27 @@ writeMatrix(fdrThres, outfile("effect-FDRthreshold-N-table.txt"), row.names=FALS
 
 ## alternatively: given a number of gene sets (say 3000), what is the FDR value of the genuine-DE geneset if there is one and only one such gene set?
 
+indexCol <- ifelse(1:nrow(y0) %in% 1:20, "red", "darkgray")
+drawHeatmap <- function(mat, RowSideColor=indexCol,main="") {
+    biosHeatmap(mat, labCol=NA, labRow=NA, RowSideColor=RowSideColor,
+                Rowv=FALSE, Colv=FALSE, col=royalbluered, zlim=c(-3,3),
+                main=main, color.key.title="Exprs", lhei=c(1,6))
+    
+}
+ipdfHeatmap <- function(filename) ipdf(figfile(filename), width=4.5, height=7)
+
+drawHeatmap(y1, main="Simulated data - 1 sigma")
+ipdfHeatmap("heatmap-y1sigma.pdf")
+
+drawHeatmap(y2, main="Simulated data - 2 sigma")
+ipdfHeatmap("heatmap-y2sigma.pdf")
+
+drawHeatmap(y2half, main="Simulated data - half 2 sigma")
+ipdfHeatmap("heatmap-y2halfsigma.pdf")
+
+drawHeatmap(y3, main="Simulated data - 3 sigma")
+ipdfHeatmap("heatmap-y3sigma.pdf")
+
+drawHeatmap(y3half, main="Simulated data - half 3 sigma")
+ipdfHeatmap("heatmap-y3halfsigma.pdf")
 

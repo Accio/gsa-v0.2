@@ -246,7 +246,7 @@ simulateTwoGroupData <- function(tgSim) {
     return(mat)
 }
 
-sigmaMatrix <- function(cor, nGenes) {
+sigmaMatrix <- function(cor, n) {
     res <- matrix(cor, nrow=n, ncol=n)
     diag(res) <- 1L
     return(res)
@@ -341,10 +341,17 @@ randomGroup <- function(n, ranges=3:50) {
     return(factor(res))
 }
 
+defaultBgDgeDeltaMeanFunc <- function(n) rnorm(n, mean=0, sd=1)
+defaultByCorSigmaFunc <- function(n) runif(n, min=0, max=1)
+
 randomlyMutateBg <- function(tgSim,
                              bgDgePerc=0,
                              bgCorPerc=0,
-                             bgDgeCorPerc=0) {
+                             bgDgeCorPerc=0,
+                             bgDgeDeltaMeanFunc=defaultBgDgeDeltaMeanFunc,
+                             bgCorSigmaFunc=defaultByCorSigmaFunc) {
+    stopifnot(bgDgeCorPerc<=bgDgePerc && bgDgeCorPerc<=bgCorPerc)
+    
     nG <- nGenes(tgSim)
     allInds <- setdiff(1:nGenes(tgSim), tpGeneSetInd(tgSim))
     set.seed(randomSeed(tgSim))
@@ -352,19 +359,18 @@ randomlyMutateBg <- function(tgSim,
     nBgDge <- ceiling(nG * bgDgePerc)
     nBgCor <- ceiling(nG * bgCorPerc)
     nBgCorDge <- ceiling(nG * bgDgeCorPerc)
-    if(length(nBgDge+nBgCor)>=length(allInds)) {
+
+    nSel <- ceiling(nG * (bgDgePerc+bgCorPerc-bgDgeCorPerc))
+    if(nSel>=length(allInds)) {
         stop("Not enough genes in the background. Set bgDgePerc/bgCorPerc to a lower level")
     }
-    stopifnot(bgDgeCorPerc<=bgDgePerc && bgDgeCorPerc<=bgCorPerc)
-    
-    selInds <- sample(allInds, nBgDge+nBgCor, replace=FALSE)
-
+    selInds <- sample(allInds, nSel, replace=FALSE)
     bgDgeInd <- selInds[1:nBgDge]
-    bgDgeDeltaMean <- rnorm(nBgDge)
+    bgDgeDeltaMean <- do.call(bgDgeDeltaMeanFunc, list(nBgDge))
     
     bgCorInd <- selInds[(nBgDge+1-nBgCorDge):length(selInds)]
     bgCorCluster <- randomGroup(length(bgCorInd))
-    bgCorSigmaBase <- runif(nlevels(bgCorCluster), min=0, max=1)
+    bgCorSigmaBase <- do.call(bgCorSigmaFunc, list(nlevels(bgCorCluster)))
     bgCorSigma <- bgCorSigmaBase[as.integer(bgCorCluster)]
     
     res <- mutateBg(tgSim,
@@ -381,6 +387,11 @@ newTwoGroupExprsSimulator <- function(nGenes=12000,
                                       tpGeneSetInd=1:20,
                                       deltaMean=1.0,
                                       tpGeneSetCor=0,
+                                      bgDgeInd=integer(),
+                                      bgDgeDeltaMean=numeric(),
+                                      bgCorInd=integer(),
+                                      bgCorCluster=factor(),
+                                      bgCorSigma=numeric(),
                                       randomSeed=1887) {
     obj <- new("TwoGroupExprsSimulator")
     nGenes(obj) <- nGenes
@@ -390,6 +401,12 @@ newTwoGroupExprsSimulator <- function(nGenes=12000,
     tpGeneSetCor(obj) <- tpGeneSetCor
     randomSeed(obj) <- randomSeed
     obj@matrix <- simulateTwoGroupData(obj)
+    obj <- mutateBg(obj,
+                    bgDgeInd=bgDgeInd,
+                    bgDgeDeltaMean=bgDgeDeltaMean,
+                    bgCorInd=bgCorInd,
+                    bgCorCluster=bgCorCluster,
+                    bgCorSigma=bgCorSigma)
     return(obj)
 }
 
@@ -399,7 +416,8 @@ setMethod("cloneTwoGroupExprsSimulator", c("TwoGroupExprsSimulator", "numeric"),
                                         nSamples=nSamples(object),
                                         tpGeneSetInd=tpGeneSetInd(object),
                                         deltaMean=deltaMean(object),
-                                        tpGeneSetCor=tpGeneSetCor(object), randomSeed=randomSeed)
+                                        tpGeneSetCor=tpGeneSetCor(object),
+                                        randomSeed=randomSeed)
           })
 setMethod("cloneTwoGroupExprsSimulator", c("TwoGroupExprsSimulator", "missing"), function(object, randomSeed) {
               newTwoGroupExprsSimulator(object, randomSeed(object))

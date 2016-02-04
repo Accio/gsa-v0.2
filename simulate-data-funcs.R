@@ -47,6 +47,11 @@ setClass("TwoGroupExprsSimulator",
                         tpGeneSetInd="integer",
                         deltaMean="numeric",
                         tpGeneSetCor="numeric",
+                        bgDgeInd="integer", ## genes not in tpGeneSet that are differentially expressed
+                        bgDgeDeltaMean="numeric",  ## deltaMean of bgDgeDelt
+                        bgCorInd="integer", ## genes not in tpGeneSet that are correlated
+                        bgCorCluster="factor", ## correlation cluster
+                        bgCorSigma="numeric", ## sigma coefficient of the correlation cluster
                         randomSeed="integer",
                         matrix="matrix"),
          prototype=list(nGenes=12000L,
@@ -54,6 +59,11 @@ setClass("TwoGroupExprsSimulator",
              tpGeneSetInd=1:20,
              deltaMean=1,
              tpGeneSetCor=c(0,0),
+             bgDgeInd=integer(),
+             bgDgeDeltaMean=numeric(),
+             bgCorInd=integer(),
+             bgCorCluster=factor(),
+             bgCorSigma=numeric(),
              randomSeed=1887L,
              matrix=matrix()),
          validity=validateTwoGroupExprsSimulator)
@@ -63,21 +73,48 @@ setGeneric("nSamples", function(object) standardGeneric("nSamples"))
 setGeneric("tpGeneSetInd", function(object) standardGeneric("tpGeneSetInd"))
 setGeneric("deltaMean", function(object) standardGeneric("deltaMean"))
 setGeneric("tpGeneSetCor", function(object) standardGeneric("tpGeneSetCor"))
+setGeneric("bgDgeInd", function(object) standardGeneric("bgDgeInd"))
+setGeneric("bgDgeLength", function(object) standardGeneric("bgDgeLength"))
+setGeneric("bgDgePerc", function(object) standardGeneric("bgDgePerc"))
+setGeneric("bgDgeDeltaMean", function(object) standardGeneric("bgDgeDeltaMean"))
+setGeneric("bgCorLength", function(object) standardGeneric("bgCorLength"))
+setGeneric("bgCorInd", function(object) standardGeneric("bgCorInd"))
+setGeneric("bgCorPerc", function(object) standardGeneric("bgCorPerc"))
+setGeneric("bgCorCluster", function(object) standardGeneric("bgCorCluster"))
+setGeneric("bgCorSigma", function(object) standardGeneric("bgCorSigma"))
 setGeneric("randomSeed", function(object) standardGeneric("randomSeed"))
+setGeneric("bgMutation", function(object, ...) standardGeneric("bgMutation"))
 
 setGeneric("nGenes<-", function(object,value) standardGeneric("nGenes<-"))
 setGeneric("nSamples<-", function(object,value) standardGeneric("nSamples<-"))
 setGeneric("tpGeneSetInd<-", function(object,value) standardGeneric("tpGeneSetInd<-"))
 setGeneric("deltaMean<-", function(object,value) standardGeneric("deltaMean<-"))
 setGeneric("tpGeneSetCor<-", function(object,value) standardGeneric("tpGeneSetCor<-"))
+setGeneric("bgDgeInd<-", function(object,value) standardGeneric("bgDgeInd<-"))
+setGeneric("bgDgeDeltaMean<-", function(object,value) standardGeneric("bgDgeDeltaMean<-"))
+setGeneric("bgCorInd<-", function(object,value) standardGeneric("bgCorInd<-"))
+setGeneric("bgCorCluster<-", function(object,value) standardGeneric("bgCorCluster<-"))
+setGeneric("bgCorSigma<-", function(object,value) standardGeneric("bgCorSigma<-"))
 setGeneric("randomSeed<-", function(object,value) standardGeneric("randomSeed<-"))
 
 setMethod("nGenes", "TwoGroupExprsSimulator", function(object) object@nGenes)
 setMethod("nSamples", "TwoGroupExprsSimulator", function(object) object@nSamples)
 setMethod("tpGeneSetInd", "TwoGroupExprsSimulator", function(object) object@tpGeneSetInd)
 setMethod("deltaMean", "TwoGroupExprsSimulator", function(object) object@deltaMean)
+setMethod("bgDgeInd", "TwoGroupExprsSimulator", function(object) object@bgDgeInd)
+setMethod("bgDgeLength", "TwoGroupExprsSimulator", function(object) length(object@bgDgeInd))
+setMethod("bgDgePerc", "TwoGroupExprsSimulator", function(object) length(object@bgDgeInd)/length(object@nGenes))
+setMethod("bgCorInd", "TwoGroupExprsSimulator", function(object) object@bgCorInd)
+setMethod("bgCorLength", "TwoGroupExprsSimulator", function(object) length(object@bgCorInd))
+setMethod("bgCorPerc", "TwoGroupExprsSimulator", function(object) length(object@bgCorInd)/length(object@nGenes))
+setMethod("bgCorCluster", "TwoGroupExprsSimulator", function(object) object@bgCorCluster)
+setMethod("bgCorSigma", "TwoGroupExprsSimulator", function(object) object@bgCorSigma)
+setMethod("bgDgeDeltaMean", "TwoGroupExprsSimulator", function(object) object@bgDgeDeltaMean)
 setMethod("tpGeneSetCor", "TwoGroupExprsSimulator", function(object) object@tpGeneSetCor)
 setMethod("randomSeed", "TwoGroupExprsSimulator", function(object) object@randomSeed)
+
+setMethod("ncol", "TwoGroupExprsSimulator", function(x) ncol(x@matrix))
+setMethod("nrow", "TwoGroupExprsSimulator", function(x) nrow(x@matrix))
 
 setMethod("nGenes<-",
           c("TwoGroupExprsSimulator", "numeric"), function(object,value) {
@@ -120,6 +157,26 @@ setMethod("randomSeed<-",
               object@randomSeed <- as.integer(value)
               return(object)
           })
+setMethod("bgDgeInd<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
+              object@bgDgeInd <- as.integer(value)
+              return(object)
+          })
+setMethod("bgDgeDeltaMean<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
+              object@bgDgeDeltaMean <- value
+              return(object)
+          })
+setMethod("bgCorInd<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
+              object@bgCorInd <- as.integer(value)
+              return(object)
+          })
+setMethod("bgCorCluster<-", c("TwoGroupExprsSimulator", "factor"), function(object, value) {
+              object@bgCorCluster <- value
+              return(object)
+          })
+setMethod("bgCorSigma<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
+              object@bgCorSigma <- value
+              return(object)
+          })
 setMethod("designMatrix", "TwoGroupExprsSimulator", function(object) {
               matrix(c(rep(1, sum(nSamples(object))),
                        rep(c(0,1), nSamples(object))),
@@ -128,8 +185,36 @@ setMethod("designMatrix", "TwoGroupExprsSimulator", function(object) {
 setMethod("contrastMatrix", "TwoGroupExprsSimulator", function(object) {
               matrix(c(0,1), byrow=FALSE, ncol=1)
           })
+
 as.matrix.TwoGroupExprsSimulator <- function(x) return(x@matrix)
 setAs(from="TwoGroupExprsSimulator", to="matrix", function(from) return(from@matrix))
+
+isGroup2 <- function(tgSim) 1:ncol(tgSim)>nSamples(tgSim)[1]
+
+mvrnormMatrix <- function(nr, nc, mu, sigma) {
+    mu <- rep_len(mu, length.out=nr)
+    sigmaMat <- sigmaMatrix(sigma, nr)
+    resMat <- t(mvrnorm(n=nc,
+                        mu=mu,
+                        Sigma=sigmaMat))
+    return(resMat)
+}
+
+twoGroupMvrnorm <- function(nGenes, nSamples, deltaMean, sigma) {
+    stopifnot(length(nSamples)==2)
+    deltaMean <- rep_len(deltaMean, length(nGenes))
+    if(length(sigma)==1)
+        sigma <- rep(sigma, 2L)
+    if(length(sigma)>=3)
+        stop("sigma must be of length 1 or 2")
+    
+    sigmaMat1 <- mvrnormMatrix(nGenes, nSamples[1], 0, sigma[1])
+    sigmaMat2 <- mvrnormMatrix(nGenes, nSamples[2], deltaMean, sigma[2])
+    res <- cbind(sigmaMat1, sigmaMat2)
+    return(res)
+}
+
+## test <- twoGroupMvrnormMatrix(5,c(3,3), 1,0.8)
 
 simulateTwoGroupData <- function(tgSim) {
     set.seed(randomSeed(tgSim))
@@ -144,27 +229,98 @@ simulateTwoGroupData <- function(tgSim) {
 
     if(length(delta)!=tpGeneCount)
         delta <- rep_len(delta, tpGeneCount)
-    
-    isGroup2 <- 1:ncol(mat) > Nsamples[1]
+
+    isG2 <- isGroup2(tgSim)
     if(all(tpCor==0)) {
-        mat[tpGeneInd,isGroup2] <-     mat[tpGeneInd,isGroup2]+delta
+        mat[tpGeneInd,isG2] <-     mat[tpGeneInd,isG2]+delta
     } else {
-        sigmaGroup1 <- matrix(tpCor[1], nrow=tpGeneCount, ncol=tpGeneCount)
-        diag(sigmaGroup1) <- 1
-        sigmaGroup2 <- matrix(tpCor[2], nrow=tpGeneCount, ncol=tpGeneCount)
-        diag(sigmaGroup2) <- 1
-        mvrnormGroup1 <- t(mvrnorm(n=Nsamples[1],
-                                   mu=rep(0, tpGeneCount),
-                                   Sigma=sigmaGroup1))
-        mvrnormGroup2 <- t(mvrnorm(n=Nsamples[2],
-                                   mu=delta,
-                                   Sigma=sigmaGroup2))
-        mat[tpGeneInd,] <- cbind(mvrnormGroup1, mvrnormGroup2)
+        set.seed(randomSeed(tgSim))
+        mat[tpGeneInd,] <- twoGroupMvrnorm(nGenes=tpGeneCount,
+                                           nSamples=Nsamples,
+                                           deltaMean=delta,
+                                           sigma=tpCor)
     }
 
     rownames(mat) <- paste("Gene", 1:Ngenes, sep="")
     colnames(mat) <- paste("Group", rep(c(1,2), Nsamples), ".Sample", c(1:Nsamples[1], 1:Nsamples[2]),sep="")
     return(mat)
+}
+
+sigmaMatrix <- function(cor, nGenes) {
+    res <- matrix(cor, nrow=n, ncol=n)
+    diag(res) <- 1L
+    return(res)
+}
+
+
+avgCor <- function(mat) {corMat <- cor(t(mat)); mean(corMat[upper.tri(corMat)])}
+mutateBg <- function(tgSim,
+                     bgDgeInd=integer(),
+                     bgDgeDeltaMean=numeric(),
+                     bgCorInd=integer(),
+                     bgCorCluster=factor(),
+                     bgCorSigma=numeric()) {
+    tpGeneInd <- tpGeneSetInd(tgSim)
+    if(any(bgDgeInd %in% tpGeneInd) || any(bgCorInd %in% tpGeneInd))
+        stop("Background gene cannot overlap with true-positive gene set genes")
+
+    bgDgeDeltaMean <- rep_len(bgDgeDeltaMean, length.out=length(bgDgeInd))
+    bgCorSigma <- rep_len(bgCorSigma, length.out=length(bgCorInd))
+
+    stopifnot(length(bgCorInd)==length(bgCorCluster))
+
+    isG2 <- isGroup2(tgSim)
+    nG <- nGenes(tgSim)
+        
+    intDgeCor <- intersect(bgDgeInd, bgCorInd)
+    if(length(intDgeCor)>0) {
+        bgDgeIsInt <- bgDgeInd %in% intDgeCor
+        bgCorIsInt <- bgCorInd %in% intDgeCor
+
+        intDeltaMean <- bgDgeDeltaMean[match(intDgeCor, bgDgeInd)]
+        intCorCluster <- droplevels(bgCorCluster[match(intDgeCor, bgCorInd)])
+        intCorSigma <- bgCorSigma[match(intDgeCor, bgCorInd)]
+        intDeltaMeanByCluster <- split(intDeltaMean, intCorCluster)
+        intIndByCorCluster <- split(intDgeCor, intCorCluster)
+        intSigmaByCorCluster <- split(intCorSigma, intCorCluster)
+
+        for(i in seq(along=intIndByCorCluster)) {
+            inds <- intIndByCorCluster[[i]]
+            sigma <- intSigmaByCorCluster[[i]][1]
+            deltaMean <- intDeltaMeanByCluster[[i]]
+            set.seed(randomSeed(tgSim))
+            intCorRep <- twoGroupMvrnorm(nGenes=length(inds),
+                                         nSamples=nSamples(tgSim),
+                                         deltaMean=deltaMean,
+                                         sigma=sigma)
+            tgSim@matrix[inds,] <- intCorRep
+        }
+        bgDgeInd <- bgDgeInd[!bgDgeIsInt]
+        bgDgeDeltaMean <- bgDgeDeltaMean[!bgDgeIsInt]
+
+        bgCorInd <- bgCorInd[!bgCorIsInt]
+        bgCorCluster <- droplevels(bgCorCluster[!bgCorIsInt])
+        bgCorSigma <- bgCorSigma[!bgCorIsInt]
+    }
+    if(length(bgDgeInd)>0) {
+        stopifnot(length(bgDgeInd)==length(bgDgeDeltaMean))
+        tgSim@matrix[bgDgeInd,isG2] <-  tgSim@matrix[bgDgeInd,isG2] + bgDgeDeltaMean
+    }
+    if(length(bgCorInd)>0) {
+        indByCluster <- split(bgCorInd,bgCorCluster)
+        sigmaByCluster <- split(bgCorSigma,bgCorCluster)
+        for(i in seq(along=indByCluster)) {
+            inds <- indByCluster[[i]]
+            sigma <- sigmaByCluster[[i]][1]
+            set.seed(randomSeed(tgSim))
+            corRep <- twoGroupMvrnorm(nGenes=length(inds),
+                                      nSamples=nSamples(tgSim),
+                                      deltaMean=0L,
+                                      sigma=sigma)
+            tgSim@matrix[inds,] <- corRep
+        }
+    }
+    return(tgSim)
 }
 
 newTwoGroupExprsSimulator <- function(nGenes=12000,
@@ -195,6 +351,8 @@ setMethod("cloneTwoGroupExprsSimulator", c("TwoGroupExprsSimulator", "numeric"),
 setMethod("cloneTwoGroupExprsSimulator", c("TwoGroupExprsSimulator", "missing"), function(object, randomSeed) {
               newTwoGroupExprsSimulator(object, randomSeed(object))
           })
+
+
 
 ## pFuncs
 getFisherP <- function(geneInd, regInd, nGenes) {

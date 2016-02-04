@@ -271,6 +271,7 @@ system.time(fisherMethodCorPerformance <- varParPerformance(varPar="tpGeneSetCor
 
 ## one-sample z-test of t-statistic: 122s
 system.time(tStatZtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatZtest))
+
 ## two-sample t-test of t-statistic: 144s
 (tStatTtestSpeed <- system.time(tStatTtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatTtest)))
 
@@ -281,7 +282,7 @@ system.time(tStatZtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor",
 (chisqSpeed <- system.time(chisqCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncChisq)))
 
 
-## test pFuncLimmaAggregated
+## test pFuncLimmaAggregated ~ 180s
 ## system.time(pFuncLimmaAggregated(tt, list(1:20, 21:40)))
 
 ## romer ~ 336s
@@ -291,3 +292,27 @@ system.time(romerCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varP
 ## TODO
 ## (1) Script
 ## (2) GSEA
+
+
+## generate data
+biosBenchmarkData <- function(nSamples,
+                              deltaMean,
+                              tpGeneSetCor,
+                              tpGeneSetInd,
+                              bgDgePerc) {
+    obj <- newTwoGroupExprsSimulator(nSamples=nSamples,
+                                     deltaMean=deltaMean,
+                                     tpGeneSetCor=tpGeneSetCor,
+                                     tpGeneSetInd=tpGeneSetInd)
+    obj <- randomlyMutateBg(obj, bgDgePerc=bgDgePerc)
+    return(obj)
+                              
+}
+biosNs <- 2:6
+biosDeltas <- c(0.5, 1, 1.5, 2, 3)
+biosRos <- c(0, 0.1, 0.2, 0.5)
+biosThetas <- c(5, 10, 20, 50, 100)
+biosEpsilon <- c(0.01, 0.05, 0.25)
+
+system.time(test <- biosBenchmarkData(2, 0.5, 0, 3, 0))
+

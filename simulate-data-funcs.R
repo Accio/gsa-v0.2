@@ -162,7 +162,7 @@ setMethod("bgDgeInd<-", c("TwoGroupExprsSimulator", "numeric"), function(object,
               return(object)
           })
 setMethod("bgDgeDeltaMean<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
-              if(length(object@bgDgeInd)==0)
+              if(length(object@bgDgeInd)==0 && length(value)!=0)
                   stop("bgDgeDeltaMean must be specified after bgDgeInd")
               object@bgDgeDeltaMean <- rep_len(value, length(object@bgDgeInd))
               return(object)
@@ -176,7 +176,7 @@ setMethod("bgCorCluster<-", c("TwoGroupExprsSimulator", "factor"), function(obje
               return(object)
           })
 setMethod("bgCorSigma<-", c("TwoGroupExprsSimulator", "numeric"), function(object, value) {
-              if(length(object@bgCorInd)==0)
+              if(length(object@bgCorInd)==0 && length(value)!=0)
                   stop("bgCorSigma must be specified after bgCorInd")
               object@bgCorSigma <- rep_len(value, length(object@bgCorInd))
               return(object)
@@ -229,6 +229,9 @@ sigmaMatrix <- function(cor, n) {
 
 avgCor <- function(mat) {corMat <- cor(t(mat)); mean(corMat[upper.tri(corMat)])}
 mutateBg <- function(tgSim) {
+
+    set.seed(randomSeed(tgSim))
+    
     bgDgeInd <- bgDgeInd(tgSim)
     bgDgeDeltaMean <- bgDgeDeltaMean(tgSim)
     bgCorInd <- bgCorInd(tgSim)
@@ -347,11 +350,10 @@ simulateTwoGroupData <- function(tgSim) {
 }
 
 
-randomGroup <- function(n, ranges=3:50) {
+randomGroup <- function(n, ranges=3:30) {
     ind <- 1:n
     nGroup <- ceiling(n/min(ranges))
-    prob <- 0.6^(log2(abs(ranges - mean(ranges))+0.5))
-    rs <- sample(ranges, nGroup, replace=TRUE, prob=prob)
+    rs <- sample(ranges, nGroup, replace=TRUE)
     left <- min(which(cumsum(rs)>=n))
     res <- rep(1:left, rs[1:left])[ind]
     return(factor(res))
@@ -382,17 +384,20 @@ randomlyMutateBg <- function(tgSim,
     }
     selInds <- sample(allInds, nSel, replace=FALSE)
 
-    if(nBgDge>0) {
+    if(bgDgePerc>0) {
         bgDgeInd(tgSim) <- selInds[1:nBgDge]
         bgDgeDeltaMean(tgSim) <- do.call(bgDgeDeltaMeanFunc, list(nBgDge))
     }
 
-    bgCorInd(tgSim) <- selInds[(nBgDge+1-nBgCorDge):length(selInds)]
-    corCluster <- randomGroup(length(bgCorInd))
-    bgCorCluster(tgSim) <- corCluster
-    bgCorSigmaBase <- do.call(bgCorSigmaFunc, list(nlevels(corCluster)))
-    bgCorSigma(tgSim) <- bgCorSigmaBase[as.integer(corCluster)]
-
+    if(bgCorPerc>0) {
+        corInds <- selInds[(nBgDge+1-nBgCorDge):length(selInds)]
+        bgCorInd(tgSim) <- corInds
+        corCluster <- randomGroup(length(corInds))
+        bgCorCluster(tgSim) <- corCluster
+        bgCorSigmaBase <- do.call(bgCorSigmaFunc, list(nlevels(corCluster)))
+        bgCorSigma(tgSim) <- bgCorSigmaBase[as.integer(corCluster)]
+    }
+    
     ## mutate background
     res <- mutateBg(tgSim)
     return(res)

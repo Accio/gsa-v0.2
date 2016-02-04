@@ -269,6 +269,12 @@ mutateBg <- function(tgSim,
 
     stopifnot(length(bgCorInd)==length(bgCorCluster))
 
+    tgSim@bgDgeInd <- bgDgeInd
+    tgSim@bgDgeDeltaMean <- bgDgeDeltaMean
+    tgSim@bgCorInd <- bgCorInd
+    tgSim@bgCorCluster <- bgCorCluster
+    tgSim@bgCorSigma <- bgCorSigma
+    
     isG2 <- isGroup2(tgSim)
     nG <- nGenes(tgSim)
         
@@ -305,6 +311,7 @@ mutateBg <- function(tgSim,
     if(length(bgDgeInd)>0) {
         stopifnot(length(bgDgeInd)==length(bgDgeDeltaMean))
         tgSim@matrix[bgDgeInd,isG2] <-  tgSim@matrix[bgDgeInd,isG2] + bgDgeDeltaMean
+
     }
     if(length(bgCorInd)>0) {
         indByCluster <- split(bgCorInd,bgCorCluster)
@@ -320,7 +327,53 @@ mutateBg <- function(tgSim,
             tgSim@matrix[inds,] <- corRep
         }
     }
+
     return(tgSim)
+}
+
+randomGroup <- function(n, ranges=3:50) {
+    ind <- 1:n
+    nGroup <- ceiling(n/min(ranges))
+    prob <- 0.6^(log2(abs(ranges - mean(ranges))+0.5))
+    rs <- sample(ranges, nGroup, replace=TRUE, prob=prob)
+    left <- min(which(cumsum(rs)>=n))
+    res <- rep(1:left, rs[1:left])[ind]
+    return(factor(res))
+}
+
+randomlyMutateBg <- function(tgSim,
+                             bgDgePerc=0,
+                             bgCorPerc=0,
+                             bgDgeCorPerc=0) {
+    nG <- nGenes(tgSim)
+    allInds <- setdiff(1:nGenes(tgSim), tpGeneSetInd(tgSim))
+    set.seed(randomSeed(tgSim))
+
+    nBgDge <- ceiling(nG * bgDgePerc)
+    nBgCor <- ceiling(nG * bgCorPerc)
+    nBgCorDge <- ceiling(nG * bgDgeCorPerc)
+    if(length(nBgDge+nBgCor)>=length(allInds)) {
+        stop("Not enough genes in the background. Set bgDgePerc/bgCorPerc to a lower level")
+    }
+    stopifnot(bgDgeCorPerc<=bgDgePerc && bgDgeCorPerc<=bgCorPerc)
+    
+    selInds <- sample(allInds, nBgDge+nBgCor, replace=FALSE)
+
+    bgDgeInd <- selInds[1:nBgDge]
+    bgDgeDeltaMean <- rnorm(nBgDge)
+    
+    bgCorInd <- selInds[(nBgDge+1-nBgCorDge):length(selInds)]
+    bgCorCluster <- randomGroup(length(bgCorInd))
+    bgCorSigmaBase <- runif(nlevels(bgCorCluster), min=0, max=1)
+    bgCorSigma <- bgCorSigmaBase[as.integer(bgCorCluster)]
+    
+    res <- mutateBg(tgSim,
+                    bgDgeInd=bgDgeInd,
+                    bgDgeDeltaMean=bgDgeDeltaMean,
+                    bgCorInd=bgCorInd,
+                    bgCorCluster=bgCorCluster,
+                    bgCorSigma=bgCorSigma)
+    return(res)
 }
 
 newTwoGroupExprsSimulator <- function(nGenes=12000,

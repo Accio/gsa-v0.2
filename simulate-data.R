@@ -1,4 +1,5 @@
 library(ribiosPlot)
+library(ribiosIO)
 figfile <- function(x) file.path("figures", x)
 
 source("simulate-data-funcs.R")
@@ -6,7 +7,7 @@ source("simulate-data-funcs.R")
 ##----------------------------------------##
 ## test
 ##----------------------------------------##
-tt <- newTwoGroupExprsSimulator()
+tt <- newTwoGroupExprsSimulator(tpGeneSetCor=0.1)
 
 cameraBenchmarker <- newBenchmarker(tt, pFunc=pFuncCamera)
 cameraBenchmarkResult <- benchmark(cameraBenchmarker)
@@ -15,13 +16,26 @@ cameraBenchmarkResult <- benchmark(cameraBenchmarker)
 tt2 <- cloneTwoGroupExprsSimulator(tt, randomSeed=1008)
 expect_equal(randomSeed(tt2), 1008)
 
+## test
+set.seed(1887); twoGroupMvrnorm1887 <- twoGroupMvrnorm(20, c(3,3), 1, 0.1)
+stopifnot(all(tt@matrix[1:20,]-twoGroupMvrnorm1887==0))
+
+## mutate byground
+ttMut <- mutateBg(tt, bgDgeInd=30:50, bgDgeDeltaMean=rnorm(20),
+                  bgCorInd=40:60,
+                  bgCorCluster=gl(3,7),
+                  bgCorSigma=.95)
+
+ttMut2 <- randomlyMutateBg(tt, bgDgePerc=0.2, bgCorPerc=0.2)
+ttMut3 <- randomlyMutateBg(tt, bgDgePerc=0.2, bgCorPerc=0.2, bgDgeCorPerc=0.02)
+
 ##----------------------------------------##
 ## benchmarks
 ##----------------------------------------##
 outfile <- function(x) file.path("output", x)
 cameraBenchmarkFile <- outfile("cameraBenchmark.RData")
 if(!loadFile(cameraBenchmarkFile)) {
-    ## corrlation
+    ## correlation
     testCors <- c(seq(0, 0.5, 0.1), seq(0.6, 1, 0.2))
     cameraCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=testCors, pFunc=pFuncCamera)
 
@@ -172,9 +186,6 @@ system.time(fisherMethodCorPerformance <- varParPerformance(varPar="tpGeneSetCor
 (gtSpeed <- system.time(gtCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncGlobaltest)))
 
 
-## romer ~ 336s
-system.time(romerCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncRomer))
-
 ## one-sample z-test of t-statistic: 122s
 system.time(tStatZtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatZtest))
 ## two-sample t-test of t-statistic: 144s
@@ -188,7 +199,11 @@ system.time(tStatZtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor",
 
 
 ## test pFuncLimmaAggregated
-pFuncLimmaAggregated(tt, list(1:20, 21:40))
+## system.time(pFuncLimmaAggregated(tt, list(1:20, 21:40)))
+
+## romer ~ 336s
+system.time(romerCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncRomer))
+
 ## two-sample t-test of t-statistic
 ## TODO
 ## (1) Script

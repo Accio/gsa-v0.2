@@ -4,30 +4,113 @@ figfile <- function(x) file.path("figures", x)
 
 source("simulate-data-funcs.R")
 
+testSimulator <- function(tgSim, pFunc=pFuncCamera) {
+    bench <- newBenchmarker(tgSim, pFunc=pFunc)
+    benchRes <- benchmark(bench)
+    print(xyplot(benchRes))
+    return(invisible(benchRes))
+}
 ##----------------------------------------##
 ## test
 ##----------------------------------------##
 tt <- newTwoGroupExprsSimulator(tpGeneSetCor=0.1)
 
-cameraBenchmarker <- newBenchmarker(tt, pFunc=pFuncCamera)
-cameraBenchmarkResult <- benchmark(cameraBenchmarker)
-(roc1 <- xyplot(cameraBenchmarkResult))
+cameraBenchmarkResult <- testSimulator(tt, pFuncCamera)
+bioqcBenchmarkResult <- testSimulator(tt, pFuncBioQCtStat)
+(rocCamera <- xyplot(cameraBenchmarkResult))
+(rocBioQC <- xyplot(bioqcBenchmarkResult))
 
-tt2 <- cloneTwoGroupExprsSimulator(tt, randomSeed=1008)
-expect_equal(randomSeed(tt2), 1008)
+## tt2 <- cloneTwoGroupExprsSimulator(tt, randomSeed=1008)
+## expect_equal(randomSeed(tt2), 1008)
 
 ## test
-set.seed(1887); twoGroupMvrnorm1887 <- twoGroupMvrnorm(20, c(3,3), 1, 0.1)
-stopifnot(all(tt@matrix[1:20,]-twoGroupMvrnorm1887==0))
+## set.seed(1887); twoGroupMvrnorm1887 <- twoGroupMvrnorm(20, c(3,3), 1, 0.1)
+## stopifnot(all(tt@matrix[1:20,]-twoGroupMvrnorm1887==0))
 
-## mutate byground
-ttMut <- mutateBg(tt, bgDgeInd=30:50, bgDgeDeltaMean=rnorm(20),
-                  bgCorInd=40:60,
-                  bgCorCluster=gl(3,7),
-                  bgCorSigma=.95)
+## mutate backgroundground
 
-ttMut2 <- randomlyMutateBg(tt, bgDgePerc=0.2, bgCorPerc=0.2)
-ttMut3 <- randomlyMutateBg(tt, bgDgePerc=0.2, bgCorPerc=0.2, bgDgeCorPerc=0.02)
+## ttMut <- mutateBgByParams(tt, bgDgeInd=30:50,
+##                          bgDgeDeltaMean=rnorm(21),
+##                          bgCorInd=40:60,
+##                          bgCorCluster=gl(7,3),
+##                          bgCorSigma=0.95)
+
+## ttMutRes <- testSimulator(ttMut)
+## (rocMut <- xyplot(ttMutRes))
+
+trellisLineCols <- trellis.par.get()$superpose.line$col
+
+## if the background genes have random correlation structures, it's not a big problem for either camera or BioQC
+ttMutRandCor <- randomlyMutateBg(tt, bgCorPerc=0.20)
+ttMutRandCorCamera <- testSimulator(ttMutRandCor, pFunc=pFuncCamera)
+ttMutRandCorBioQC <- testSimulator(ttMutRandCor, pFunc=pFuncBioQCtStat)
+update(rocCamera, sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/20% random cor", main="Random correlations in background genes") + update(rocBioQC, col="red") + xyplot(ttMutRandCorCamera,col=trellisLineCols[1], lty=2) + xyplot(ttMutRandCorBioQC, col="red", lty=2)
+ipdf(figfile("ROC-randomCorrelation.pdf"), width=5L, height=5L)
+
+## what happens if the background genes have increased expression?
+ttMutPos <- randomlyMutateBg(tt, bgDgePerc=0.3,
+                             bgDgeDeltaMeanFunc=function(n) rnorm(n, mean=1, sd=1))
+ttMutPosCamera <- testSimulator(ttMutPos, pFunc=pFuncCamera)
+ttMutPosBioQC <- testSimulator(ttMutPos, pFunc=pFuncBioQCtStat)
+update(rocCamera, sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/20% with logFC~N(1,1)", main="30% DE in background genes") + update(rocBioQC, col="red") + xyplot(ttMutPosCamera, lty=2, col=trellisPar$superpose.line$col[1]) + xyplot(ttMutPosBioQC, col="red", lty=2)
+ipdf(figfile("ROC-randomDE.pdf"), width=5L, height=5L)
+
+update(rocCamera, sub="CAMERA. Solid/Dash: iid/30% with logFC~N(1,1)", main="DE in background genes")+xyplot(ttMutPosCamera, lty=2, col=trellisPar$superpose.line$col[1])
+ipdf(figfile("ROC-randomDE-cameraOnly.pdf"), width=5L, height=5L)
+
+update(rocBioQC, sub="BioQC. Solid/Dash: iid/30% with logFC~N(1,1)", main="DE in background genes", col="red")+xyplot(ttMutPosBioQC, lty=2, col="red")
+ipdf(figfile("ROC-randomDE-BioQConly.pdf"), width=5L, height=5L)
+
+## a mild change?
+ttMutMildPos <- randomlyMutateBg(tt, bgDgePerc=0.05,
+                             bgDgeDeltaMeanFunc=function(n) rnorm(n, mean=1, sd=1))
+ttMutMildPosCamera <- testSimulator(ttMutMildPos, pFunc=pFuncCamera)
+xyplot(ttMutMildPosCamera)
+
+## if random gene sets are correlated
+testMutCor <- function(tgSim, pFunc=pFuncCamera) {
+    bench <- newBenchmarker(tgSim, pFunc=pFunc)
+    gsIndList <- bench@genesets[-1]
+    gsInd <- unlist(gsIndList)
+    gsFac <- factor(rep(seq(along=gsIndList), sapply(gsIndList,length)))
+    tgSimMut <- mutateBgByParams(tgSim, bgCorInd=gsInd, bgCorCluster=gsFac, bgCorSigma=0.5)
+    bench <- newBenchmarker(tgSimMut, pFunc=pFunc, geneSets=genesets(bench))
+    benchRes <- benchmark(bench)
+    print(xyplot(benchRes))
+    return(invisible(benchRes))
+}
+(rocMut3 <- testMutCor(tt))
+(rocMut3bioqc <- testMutCor(tt, pFunc=pFuncBioQCtStat))
+
+
+xyplot(rocMut3, main="Strong correlation (0.5) in GS_R", sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/50% cor in GS_R", lty=2)+xyplot(rocMut3bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
+ipdf(figfile("ROC-GS_Rcor.pdf"), width=5L, height=5L)
+
+xyplot(rocMut3, main="Strong correlation (0.5) in GS_R", sub="CAMERA. Solid/Dash: iid/50% cor in GS_R", lty=2)+rocCamera
+ipdf(figfile("ROC-GS_Rcor-cameraOnly.pdf"), width=5L, height=5L)
+
+update(rocBioQC, col="red", main="Strong correlation (0.5) in GS_R", sub="BioQC. Solid/Dash: iid/50% cor in GS_R")+xyplot(rocMut3bioqc, col="red", lty=2)
+ipdf(figfile("ROC-GS_Rcor-BioQConly.pdf"), width=5L, height=5L)
+
+AUC(rocMut3bioqc) ## AUC=.9
+summary(ranks(rocMut3bioqc)<=5) ## in 90% case ranks highest
+
+## as expected, if the expression of GS_R are also changed, the curve will look much worsex
+testMutDeltaMean <- function(tgSim, pFunc=pFuncCamera) {
+    bench <- newBenchmarker(tgSim, pFunc=pFunc)
+    gsIndList <- bench@genesets[-1]
+    gsInd <- unlist(gsIndList)
+    gsFac <- factor(rep(seq(along=gsIndList), sapply(gsIndList,length)))
+    tgSimMut <- mutateBgByParams(tgSim, bgDgeInd=gsInd, bgDgeDeltaMean=0.5)
+    bench <- newBenchmarker(tgSimMut, pFunc=pFunc, geneSets=genesets(bench))
+    benchRes <- benchmark(bench)
+    print(xyplot(benchRes))
+    return(invisible(benchRes))
+}
+(rocMut4 <- testMutDeltaMean(tt))
+(rocMut4bioqc <- testMutDeltaMean(tt, pFunc=pFuncBioQCtStat))
+
+xyplot(rocMut4, lty=2)+xyplot(rocMut4bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
 
 ##----------------------------------------##
 ## benchmarks

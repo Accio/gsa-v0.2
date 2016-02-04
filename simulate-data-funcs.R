@@ -6,6 +6,7 @@ library(ribiosExpression)
 library(ribiosUtils)
 library(latticeExtra)
 library(BioQC)
+library(globaltest)
 
 
 ##------------------------------------------------------------##
@@ -241,6 +242,7 @@ pFuncCameraRank <- function(tgSim, index) {
     return(res$PValue)
 }
 
+
 pFuncBioQCtStat <- function(tgSim, index) {
     wmwRes <- wmwTest(as.matrix(tgSim), index, alternative="Q")
     fit <- lmFit(wmwRes, design=designMatrix(tgSim))
@@ -254,14 +256,7 @@ fisherMethod <- function(pValues) {
     df <- 2*length(pValues)
     pchisq( -2*sum(log(pValues)), df, lower.tail=FALSE)
 }
-pFuncFisherMethod <- function(tgSim, index) {
-    fit <- lmFit(as.matrix(tgSim), design=designMatrix(tgSim))
-    fit <- contrasts.fit(fit, contrasts=contrastMatrix(tgSim))
-    fit <- eBayes(fit)
-    pGenes <- fit$p.value
-    fisherP <- sapply(index, function(x) fisherMethod(pGenes[x]))
-    return(fisherP)
-}
+
 
 pFuncMroast <- function(tgSim, index) {
     res <- mroast(as.matrix(tgSim),
@@ -278,6 +273,107 @@ pFuncRomer <- function(tgSim, index) {
                  contrast=contrastMatrix(tgSim), nrot=199)
     return(res[,"Mixed"])
 }
+
+pFuncGlobaltest <- function(tgSim, index) {
+    Y <- factor(designMatrix(tgSim)[,2L])
+    X <- t(as.matrix(tgSim))
+    gtObj <- gt(Y, X, subsets=index)
+    p <- gtObj@result[,"p-value"]
+    return(p)
+}
+
+ztest <- function(stats) {
+  ms <- mean(stats, na.rm=TRUE)
+  eg <- sqrt(length(stats)) * ms
+  p.less <- pnorm(eg, lower.tail=TRUE)
+  p.greater <- 1-p.less
+  p.twosided <- pmin(p.less, p.greater)*2
+  res <- c(statistic=eg,
+           count=length(stats),
+           p.less=p.less,
+           p.greater=p.greater,
+           p.twosided=p.twosided)
+  return(res)
+}
+
+tgSim2limmaFit <- function(tgSim) {
+    fit <- lmFit(as.matrix(tgSim), design=designMatrix(tgSim))
+    fit <- contrasts.fit(fit, contrasts=contrastMatrix(tgSim))
+    fit <- eBayes(fit)
+    return(fit)
+}
+
+pFuncFisherMethod <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    pGenes <- fit$p.value
+    fisherP <- sapply(index, function(x) fisherMethod(pGenes[x]))
+    return(fisherP)
+}
+
+pFuncTstatZtest <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    tVals <- fit$t[,1]
+    pZtest <- sapply(index, function(x) ztest(tVals[x])["p.twosided"])
+    return(pZtest)
+}
+
+pFuncTstatTtest <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    tVals <- fit$t[,1]
+    pTtest <- sapply(index, function(x) t.test(tVals[x], tVals[-x], alternative="two.sided")$p.value)
+    return(pTtest)
+}
+
+pFuncTstatWMW <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    tVals <- fit$t[,1]
+    p <- unname(wmwTest(tVals, index, alternative="two.sided"))
+    return(p)
+}
+
+## Chiseq
+chisqTest <- function(stats) {
+  ms <- mean(stats, na.rm=TRUE)
+  count <- length(stats)
+  statistic <- (sum((stats - ms)^2)-(count-1))/(2*(count-1))
+
+  p.less <- pnorm(statistic, lower.tail=TRUE)
+  p.greater <- 1-p.less
+  p.twosided <- pmin(p.less, p.greater)*2
+  res <- c(statistic=statistic,
+           count=length(stats),
+           p.less=p.less,
+           p.greater=p.greater,
+           p.twosided=p.twosided)
+  return(res)
+}
+
+pFuncChisq <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    tVals <- fit$t[,1]
+    pChisq <- sapply(index, function(x) chisqTest(tVals[x])["p.twosided"])
+    return(pChisq)
+}
+
+## a aggregated method to save time
+pFuncLimmaAggregated <- function(tgSim, index) {
+    fit <- tgSim2limmaFit(tgSim)
+    pGenes <- fit$p.value
+    pFisherMethod <- sapply(index, function(x) fisherMethod(pGenes[x]))
+    tVals <- fit$t[,1]
+    pZtest <- unname(sapply(index, function(x) ztest(tVals[x])["p.twosided"]))
+    pTtest <- unname(sapply(index, function(x) t.test(tVals[x], tVals[-x], alternative="two.sided")$p.value))
+    pWmw <- unname(wmwTest(tVals, index, alternative="two.sided"))
+    pChisq <- unname(sapply(index, function(x) chisqTest(tVals[x])["p.twosided"]))
+    res <- list(pFisherMethod=pFisherMethod,
+                pZtest=pZtest,
+                pTtest=pTtest,
+                pWmw=pWmw,
+                pChisq=pChisq)
+    return(res)
+}
+
+
 
 setClass("BenchmarkDataset",
          representation("simulators"="list",

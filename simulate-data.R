@@ -162,21 +162,34 @@ ipdf(figfile("ROC-correlation-BioQC.log10P.Tstat-Camera.pdf"), width=6.5, height
 ## fisher's method ~ 99s
 system.time(fisherMethodCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncFisherMethod))
 
-
 ## mroast ~ 126s 
 (mroastSpeed <- system.time(mroastCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncMroast)))
 
 ## fisher: 131s
 (fisherExactSpeed <- system.time(testFisherPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncFisherExact)))
 
+## globaltest 290s
+(gtSpeed <- system.time(gtCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncGlobaltest)))
+
+
 ## romer ~ 336s
 system.time(romerCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncRomer))
 
+## one-sample z-test of t-statistic: 122s
+system.time(tStatZtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatZtest))
+## two-sample t-test of t-statistic: 144s
+(tStatTtestSpeed <- system.time(tStatTtestCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatTtest)))
+
+## WMW of t-statistic: 112s
+(tStatWmwSpeed <- system.time(tStatWmwCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncTstatWMW)))
+
+## Chisq^test of t-statistic: 110s
+(chisqSpeed <- system.time(chisqCorPerformance <- varParPerformance(varPar="tpGeneSetCor", varParList=0.1, pFunc=pFuncChisq)))
 
 
-
-
+## test pFuncLimmaAggregated
+pFuncLimmaAggregated(tt, list(1:20, 21:40))
+## two-sample t-test of t-statistic
 ## TODO
-## (1) Global test
-## (2) Script
-## (3) GSEA
+## (1) Script
+## (2) GSEA

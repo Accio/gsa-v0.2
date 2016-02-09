@@ -60,7 +60,7 @@ trellisLineCols <- trellis.par.get()$superpose.line$col
 ttMutRandCor <- randomlyMutateBg(tt, bgCorPerc=0.20)
 ttMutRandCorCamera <- testSimulator(ttMutRandCor, pFunc=pFuncCamera)
 ttMutRandCorBioQC <- testSimulator(ttMutRandCor, pFunc=pFuncBioQCtStat)
-update(rocCamera, sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/20% random cor", main="Random correlations in background genes") + update(rocBioQC, col="red") + xyplot(ttMutRandCorCamera,col=trellisLineCols[1], lty=2) + xyplot(ttMutRandCorBioQC, col="red", lty=2)
+update(rocCamera, sub="CAMERA:Blue; rowScaleWMW: Red. Solid/Dash: iid/20% random cor", main="Random correlations in background genes") + update(rocBioQC, col="red") + xyplot(ttMutRandCorCamera,col=trellisLineCols[1], lty=2) + xyplot(ttMutRandCorBioQC, col="red", lty=2)
 ipdf(figfile("ROC-randomCorrelation.pdf"), width=5L, height=5L)
 
 ## what happens if the background genes have increased expression?
@@ -68,13 +68,13 @@ ttMutPos <- randomlyMutateBg(tt, bgDgePerc=0.3,
                              bgDgeDeltaMeanFunc=function(n) rnorm(n, mean=1, sd=1))
 ttMutPosCamera <- testSimulator(ttMutPos, pFunc=pFuncCamera)
 ttMutPosBioQC <- testSimulator(ttMutPos, pFunc=pFuncBioQCtStat)
-update(rocCamera, sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/30% with logFC~N(1,1)", main="30% DE in background genes") + update(rocBioQC, col="red") + xyplot(ttMutPosCamera, lty=2, col=trellisLineCols[1]) + xyplot(ttMutPosBioQC, col="red", lty=2)
+update(rocCamera, sub="CAMERA:Blue; rowScaleWMW: Red. Solid/Dash: iid/30% with logFC~N(1,1)", main="30% DE in background genes") + update(rocBioQC, col="red") + xyplot(ttMutPosCamera, lty=2, col=trellisLineCols[1]) + xyplot(ttMutPosBioQC, col="red", lty=2)
 ipdf(figfile("ROC-randomDE.pdf"), width=5L, height=5L)
 
 update(rocCamera, sub="CAMERA. Solid/Dash: iid/30% with logFC~N(1,1)", main="DE in background genes")+xyplot(ttMutPosCamera, lty=2, col=trellisLineCols[1])
 ipdf(figfile("ROC-randomDE-cameraOnly.pdf"), width=5L, height=5L)
 
-update(rocBioQC, sub="BioQC. Solid/Dash: iid/30% with logFC~N(1,1)", main="DE in background genes", col="red")+xyplot(ttMutPosBioQC, lty=2, col="red")
+update(rocBioQC, sub="rowScaleWMW. Solid/Dash: iid/30% with logFC~N(1,1)", main="DE in background genes", col="red")+xyplot(ttMutPosBioQC, lty=2, col="red")
 ipdf(figfile("ROC-randomDE-BioQConly.pdf"), width=5L, height=5L)
 
 ## a mild change?
@@ -98,13 +98,13 @@ testMutCor <- function(tgSim, pFunc=pFuncCamera, sigma=0.25) {
 rocMut3 <- testMutCor(tt, pFunc=pFuncCamera)
 rocMut3bioqc <- testMutCor(tt, pFunc=pFuncBioQCtStat)
 
-xyplot(rocMut3, main="Moderate correlation (0.25) in GS_R", sub="CAMERA:Blue; BioQC: Red. Solid/Dash: iid/25% cor in GS_R", lty=2)+xyplot(rocMut3bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
+xyplot(rocMut3, main="Moderate correlation (0.25) in GS_R", sub="CAMERA:Blue; rowScaleWMW: Red. Solid/Dash: iid/25% cor in GS_R", lty=2)+xyplot(rocMut3bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
 ipdf(figfile("ROC-GS_Rcor.pdf"), width=5L, height=5L)
 
 xyplot(rocMut3, main="Strong correlation (0.25) in GS_R", sub="CAMERA. Solid/Dash: iid/25% cor in GS_R", lty=2)+rocCamera
 ipdf(figfile("ROC-GS_Rcor-cameraOnly.pdf"), width=5L, height=5L)
 
-update(rocBioQC, col="red", main="Strong correlation (0.25) in GS_R", sub="BioQC. Solid/Dash: iid/25% cor in GS_R")+xyplot(rocMut3bioqc, col="red", lty=2)
+update(rocBioQC, col="red", main="Strong correlation (0.25) in GS_R", sub="rowScaleWMW. Solid/Dash: iid/25% cor in GS_R")+xyplot(rocMut3bioqc, col="red", lty=2)
 ipdf(figfile("ROC-GS_Rcor-BioQConly.pdf"), width=5L, height=5L)
 
 AUC(rocMut3bioqc) ## AUC=.9
@@ -127,6 +127,29 @@ testMutDeltaMean <- function(tgSim, pFunc=pFuncCamera) {
 (rocMut4bioqc <- testMutDeltaMean(tt, pFunc=pFuncBioQCtStat))
 
 xyplot(rocMut4, lty=2)+xyplot(rocMut4bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
+
+## background
+testMutBgExprs <- function(tgSim, pFunc=pFuncCamera) {
+    bench <- newBenchmarker(tgSim, pFunc=pFunc)
+    gsIndList <- bench@genesets[-1]
+    gsInd <- unlist(gsIndList)
+    gsFac <- factor(rep(seq(along=gsIndList), sapply(gsIndList,length)))
+    bench <- newBenchmarker(tgSim, pFunc=pFunc, geneSets=genesets(bench))
+    for(i in seq(along=bench@simulators)) {
+        cmat <- bench@simulators[[i]]@matrix
+        bg <- rpois(nrow(cmat), 8L)+2L
+        bench@simulators[[i]]@matrix <- cmat+bg
+    }
+    benchRes <- benchmark(bench)
+    print(xyplot(benchRes))
+    return(invisible(benchRes))
+}
+## ttShort <- tt; tpGeneSetInd(ttShort) <- 1:5
+(rocMutBe <- testMutBgExprs(tt))
+(rocMutBeBioQC <- testMutBgExprs(tt, pFunc=pFuncBioQCtStat))
+
+xyplot(rocMutBe, lty=2, main="Effect of row-scaling", sub="CAMERA:Blue; rowScaleWMW: Red. Solid/Dash: w and w/o row scaling") + rocCamera + update(rocBioQC, col="red")+update(xyplot(rocMutBeBioQC), col="red", lty=2)
+ipdf(figfile("ROC-rowScaling.pdf"), width=6L, height=6L)
 
 ##----------------------------------------##
 ## benchmarks
@@ -281,7 +304,7 @@ ipdf(figfile("ROC-correlation-BioQC.log10P.Tstat-Camera.pdf"), width=6.5, height
 nSamples <- c(2:6,8,10)
 delta <- c(0.5, 1, 1.5, 2, 3)
 rou <- c(0, 0.1, 0.2, 0.5)
-theta <- c(2,5,10,20,50,100)
+theta <- c(2,5,10,20,50,100, 200, 300, 500, 1000)
 epsilon <- c(0.005, 0.01, 0.05, 0.15)
 
 dim(parameters <- expand.grid(nSample=nSamples, delta=delta, rou=rou, theta=theta, epsilon=epsilon))
@@ -296,19 +319,10 @@ comm <- with(parameters,
                      file.path(outdir, paste(outfileBases, ".stat.txt", sep="")),
                      file.path(outdir, paste(outfileBases, ".log", sep=""))))
 
-length(comm) ## 3360
-
 jobs <- sprintf("/apps64/bi/jobsubmitter/submit_job -command \"%s\" -name %s -dir %s -qsubFile qsub-GSEsimulation.bash",
                 comm, outfileBases, outdir)
 file.remove(c("prepareGSEsimulationJobs.bash", "qsub-GSEsimulation.bash"))
 writeLines(jobs, "prepareGSEsimulationJobs.bash")
+system("bash prepareGSEsimulationJobs.bash")
+system("ssh zhangj83@rbalhpc05 ~/projects//2016-01-NEWS-ScienceAtTTB/gsa-v0.2/qsub-GSEsimulation.bash")
 
-## bash prepareGSEsimulationJobs.bash
-##  ssh zhangj83@rbalhpc05 ~/projects//2016-01-NEWS-ScienceAtTTB/gsa-v0.2/qsub-GSEsimulation.bash
-
-## random gene sets' correlation
-mat <- ribiosGSEA:::rnormMatrix(1000, 6)
-rGeneSetSizes <- as.integer(runif(1000, min=1, max=200))
-rGeneSets <- lapply(1:1000, function(x) sample(1:nrow(mat), rGeneSetSizes[x]))
-matCamera <- limma::camera(mat, rGeneSets, design=cbind(rep(1,6), c(rep(0,3), rep(1,3))), contrast=2)
-with(matCamera, smoothScatter(Correlation ~ NGenes))

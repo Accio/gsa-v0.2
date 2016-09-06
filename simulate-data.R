@@ -3,6 +3,7 @@ library(ribiosIO)
 library(ribiosGSEA)
 library(lattice)
 library(latticeExtra)
+library(Biobase)
 figfile <- function(x) file.path("figures", x)
 
 testSimulator <- function(tgSim, pFunc=pFuncCamera, ngsr=99, B=100) {
@@ -13,7 +14,14 @@ testSimulator <- function(tgSim, pFunc=pFuncCamera, ngsr=99, B=100) {
 }
 tt <- newTwoGroupExprsSimulator(tpGeneSetCor=0.1)
 
+
 ## quick tests
+pFuncKS <- function(tgSim ,index) {
+    fit <- ribiosGSEA:::tgSim2limmaFit(tgSim)
+    tVals <- fit$t[, 1]
+    ps <- sapply(index, function(x) ks.test(tVals[x], tVals[-x])$p.value)
+    return(ps)
+}
 fastTestSimulator <- function(simulator, pFunc) testSimulator(simulator, pFunc, ngsr=2, B=5)
 system.time(fastCameraTest <- fastTestSimulator(tt, pFunc=pFuncCamera))
 system.time(fastBioQCTest <- fastTestSimulator(tt, pFunc=pFuncBioQCtStat))
@@ -25,17 +33,27 @@ system.time(fastGlobalTest <- fastTestSimulator(tt, pFunc=pFuncGlobaltest))
 system.time(fastTstatZtest <- fastTestSimulator(tt, pFunc=pFuncTstatZtest))
 system.time(fastTstatTtest <- fastTestSimulator(tt, pFunc=pFuncTstatTtest))
 system.time(fastTstatWMW <- fastTestSimulator(tt, pFunc=pFuncTstatWMW))
+system.time(fastKS <- fastTestSimulator(tt, pFunc=pFuncKS))
 system.time(fastTstatChisq <- fastTestSimulator(tt, pFunc=pFuncTstatChisq))
 system.time(fastRomer <- fastTestSimulator(tt, pFunc=pFuncRomer))
 
 ##----------------------------------------##
 ## Performance
 ##----------------------------------------##
+
 cameraBenchmarkResult <- testSimulator(tt, pFuncCamera)
 bioqcBenchmarkResult <- testSimulator(tt, pFuncBioQCtStat)
 (rocCamera <- xyplot(cameraBenchmarkResult))
 (rocBioQC <- xyplot(bioqcBenchmarkResult))
 
+
+
+## ttCor
+ttCor <-  newTwoGroupExprsSimulator(tpGeneSetCor=0.5)
+bioqcCorBenchmarkResult <- testSimulator(ttCor, pFuncBioQCtStat)
+xyplot(bioqcCorBenchmarkResult, col="red", lty=2, sub="rowScaleWMW. Solid/Dash line: rou=0.1/rou=0.5", main="Impact of intra-gene-set correlation") + update(rocBioQC, col="red")
+ipdf(figfile("ROC-rowScaleWMW-cor.pdf"), width=5L, height=5L)
+cat()
 ## tt2 <- cloneTwoGroupExprsSimulator(tt, randomSeed=1008)
 ## expect_equal(randomSeed(tt2), 1008)
 
@@ -97,6 +115,7 @@ testMutCor <- function(tgSim, pFunc=pFuncCamera, sigma=0.25) {
 }
 rocMut3 <- testMutCor(tt, pFunc=pFuncCamera)
 rocMut3bioqc <- testMutCor(tt, pFunc=pFuncBioQCtStat)
+rocMut3ks <- testMutCor(tt, pFunc=pFuncKS)
 
 xyplot(rocMut3, main="Moderate correlation (0.25) in GS_R", sub="CAMERA:Blue; rowScaleWMW: Red. Solid/Dash: iid/25% cor in GS_R", lty=2)+xyplot(rocMut3bioqc, col="red", lty=2)+update(rocBioQC, col="red")+rocCamera
 ipdf(figfile("ROC-GS_Rcor.pdf"), width=5L, height=5L)
@@ -106,6 +125,9 @@ ipdf(figfile("ROC-GS_Rcor-cameraOnly.pdf"), width=5L, height=5L)
 
 update(rocBioQC, col="red", main="Strong correlation (0.25) in GS_R", sub="rowScaleWMW. Solid/Dash: iid/25% cor in GS_R")+xyplot(rocMut3bioqc, col="red", lty=2)
 ipdf(figfile("ROC-GS_Rcor-BioQConly.pdf"), width=5L, height=5L)
+
+xyplot(rocMut3ks,col="black", sub="Strong correlation (0.25) in GS_R. Black/Red/Blue:GSEA-P/BioQC/camera")+xyplot(rocMut3bioqc, col="red")+xyplot(rocMut3)
+ipdf(figfile("ROC-GS_Rcor-BioQC-camera-GSEA-P.pdf"), width=6L, height=6L)
 
 AUC(rocMut3bioqc) ## AUC=.9
 summary(ranks(rocMut3bioqc)<=5) ## in 88% case ranks highest
@@ -326,3 +348,46 @@ writeLines(jobs, "prepareGSEsimulationJobs.bash")
 system("bash prepareGSEsimulationJobs.bash")
 system("ssh zhangj83@rbalhpc05 ~/projects//2016-01-NEWS-ScienceAtTTB/gsa-v0.2/qsub-GSEsimulation.bash")
 
+
+
+##----------------------------------------##
+## why intra-geneset-correlation is so problematic?
+##----------------------------------------##
+ttLarge <- newTwoGroupExprsSimulator(nSample=10, tpGeneSetCor=0.1, deltaMean=1.5)
+ttLargeCor <- newTwoGroupExprsSimulator(nSample=10, tpGeneSetCor=0.5, deltaMean=1.5)
+
+## cameraLargeBenchmarkResult <- testSimulator(ttLarge, pFuncCamera)
+## cameraLargeCorBenchmarkResult <- testSimulator(ttLargeCor, pFuncCamera)
+bioqcLargeBenchmarkResult <- testSimulator(ttLarge, pFuncBioQCtStat)
+bioqcLargeCorBenchmarkResult <- testSimulator(ttLargeCor, pFuncBioQCtStat)
+
+
+## step by step
+ttLargeCorBench <- newBenchmarker(ttLargeCor, ngsr=99, B=100, pFuncBioQCtStat)
+ttLargeCorBenchRes <- benchmark(ttLargeCorBench)
+xyplot(ttLargeCorBenchRes)
+
+## the effect size is indeed smaller
+mean(tpDiff(ttLargeCorBench@simulators[[which.max(ttLargeCorBenchRes@ranks)]]))
+
+mean(tpDiff(ttLargeCorBench@simulators[[which.min(ttLargeCorBenchRes@ranks)]]))
+
+compCol <- rep(c("black", "red"), each=10)
+biosHeatmap(exprs(ttLargeCorBench@simulators[[2]])[1:20,], Rowv=FALSE, Colv=FALSE, scale="row", zlim=c(-2,2), ColSideCol=compCol, main="Strong correlation", cexCol=1.5, cexRow=1.5, color.key.title="Exprs")
+ipdf(figfile("heatmap-strongCor.pdf"), width=5L, height=5L)
+     
+biosHeatmap(exprs(ttLarge)[1:20,], Rowv=FALSE, Colv=FALSE, scale="row", zlim=c(-2,2), ColSideCol=compCol, main="No correlation", cexCol=1.5, cexRow=1.5, color.key.title="Exprs")
+ipdf(figfile("heatmap-noCor.pdf"), width=5L, height=5L)
+
+
+biosHeatmap(exprs(ttLargeCorBench@simulators[[which.max(ttLargeCorBenchRes@ranks)]])[1:20,], Rowv=FALSE, Colv=FALSE, scale="row", zlim=c(-2,2))
+
+##----------------------------------------##
+## try GSEA-P
+##----------------------------------------##
+
+## KS
+ksBenchmarkResult <- testSimulator(tt, pFuncKS)
+(rocKS <- xyplot(ksBenchmarkResult)
+ 
+rocCamera + update(rocBioQC, col="red") + update(rocKS, col="blue")
